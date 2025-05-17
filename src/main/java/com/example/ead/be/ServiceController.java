@@ -2,6 +2,7 @@ package com.example.ead.be;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.Arrays;
@@ -25,14 +26,14 @@ public class ServiceController {
     }
 
     @DeleteMapping("/recipe/{name}")
-    public int deleteRecipe(@PathVariable("name") String name) {
+    public ResponseEntity<Integer> deleteRecipe(@PathVariable("name") String name) {
         System.out.println("About to delete all the recipes named " + name);
-        return persistence.deleteRecipesByName(Arrays.asList(name));
+        int result = persistence.deleteRecipesByName(Arrays.asList(name));
+        return ResponseEntity.ok(result);
     }
 
     @PostMapping("/recipe")
-    @ResponseStatus(HttpStatus.CREATED)
-    public int saveRecipe(@RequestBody Recipe rec) {
+    public ResponseEntity<Void> saveRecipe(@RequestBody Recipe rec) {
         System.out.println("=== Recipe Submission Debug ===");
         System.out.println("Received recipe data: " + rec);
         System.out.println("Recipe name: " + rec.getName());
@@ -43,12 +44,15 @@ public class ServiceController {
             int result = persistence.addRecipes(Arrays.asList(rec));
             System.out.println("MongoDB operation result: " + result);
             System.out.println("=== End Recipe Submission Debug ===");
-            return result;
+            if (result > 0) {
+                return new ResponseEntity<>(HttpStatus.CREATED);
+            } else {
+                return new ResponseEntity<>(HttpStatus.INTERNAL_SERVER_ERROR);
+            }
         } catch (Exception e) {
             System.err.println("Error saving recipe: " + e.getMessage());
             e.printStackTrace();
-            throw e;
+            return new ResponseEntity<>(HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
-
 }

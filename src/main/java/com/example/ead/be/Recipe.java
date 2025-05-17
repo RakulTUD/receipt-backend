@@ -1,26 +1,29 @@
-// POJO (Plain Old Java Object) class defining a recipe. This class is a POJO because it contains getters and
-// setters for every member variable as well as an empty constructor.
-
 package com.example.ead.be;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import java.util.ArrayList;
 import java.util.List;
 
 public class Recipe {
+    @JsonProperty("name")
     private String name;
+
+    @JsonProperty("ingredients")
     private List<String> ingredients;
+
+    @JsonProperty("prepTimeInMinutes")
     private int prepTimeInMinutes;
 
-    public Recipe(String name, List<String> ingredients, int prepTimeInMinutes) {
+    public Recipe(@JsonProperty("name") String name,
+                  @JsonProperty("ingredients") List<String> ingredients,
+                  @JsonProperty("prepTimeInMinutes") int prepTimeInMinutes) {
         this.name = name;
         this.ingredients = ingredients;
         this.prepTimeInMinutes = prepTimeInMinutes;
     }
 
-    // empty constructor required when we fetch data from the database -- getters and setters are later used to
-    // set values for member variables
     public Recipe() {
-        ingredients = new ArrayList<String>();
+        ingredients = new ArrayList<>();
         name = "";
     }
 
@@ -34,27 +37,10 @@ public class Recipe {
         return sb.toString();
     }
 
-    public String getName() {
-        return name;
-    }
-
-    public void setName(String name) {
-        this.name = name;
-    }
-
-    public List<String> getIngredients() {
-        return ingredients;
-    }
-
-    public void setIngredients(List<String> ingredients) {
-        this.ingredients = ingredients;
-    }
-
-    public int getPrepTimeInMinutes() {
-        return prepTimeInMinutes;
-    }
-
-    public void setPrepTimeInMinutes(int prepTimeInMinutes) {
-        this.prepTimeInMinutes = prepTimeInMinutes;
-    }
+    public String getName() { return name; }
+    public void setName(String name) { this.name = name; }
+    public List<String> getIngredients() { return ingredients; }
+    public void setIngredients(List<String> ingredients) { this.ingredients = ingredients; }
+    public int getPrepTimeInMinutes() { return prepTimeInMinutes; }
+    public void setPrepTimeInMinutes(int prepTimeInMinutes) { this.prepTimeInMinutes = prepTimeInMinutes; }
 }
