@@ -14,8 +14,8 @@ jobs:
         with:
           java-version: '17'
           distribution: 'temurin'
-      - name: Run tests
-        run: mvn test
+      - name: Maven Build & Tests
+        run: mvn clean compile test
 
   deploy:
     needs: build-test
@@ -23,17 +23,21 @@ jobs:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     steps:
       - uses: actions/checkout@v3
+
       - name: Authenticate to GCP
         uses: google-github-actions/auth@v1
         with:
           credentials_json: ${{ secrets.GCP_SA_KEY }}
+
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v1
+
       - name: Build and push Docker image
         run: |
           gcloud auth configure-docker gcr.io
           docker build -t gcr.io/${{ env.GCP_PROJECT }}/receipt-backend:${{ github.sha }} .
           docker push gcr.io/${{ env.GCP_PROJECT }}/receipt-backend:${{ github.sha }}
+
       - name: Deploy to Cloud Run (Stable Revision)
         run: |
           gcloud run deploy backend \
@@ -43,6 +47,7 @@ jobs:
             --allow-unauthenticated \
             --tag stable \
             --set-env-vars MONGODB_URI=${{ secrets.MONGODB_URI }},SPRING_PROFILES_ACTIVE=prod
+
       - name: Deploy to Cloud Run (Canary Revision)
         run: |
           gcloud run deploy backend \
@@ -52,6 +57,7 @@ jobs:
             --allow-unauthenticated \
             --tag canary \
             --set-env-vars MONGODB_URI=${{ secrets.MONGODB_URI }},SPRING_PROFILES_ACTIVE=prod
+
       - name: Traffic Splitting
         run: |
           gcloud run services update-traffic backend \
