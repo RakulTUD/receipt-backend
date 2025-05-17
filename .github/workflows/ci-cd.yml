@@ -1,0 +1,56 @@
+name: Backend CI/CD
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Set up JDK
+        uses: actions/setup-java@v3
+        with:
+          java-version: '17'
+      - name: Build and test
+        run: mvn clean install
+
+  deploy:
+    needs: build-test
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v3
+      - name: Authenticate to GCP
+        uses: google-github-actions/auth@v1
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v1
+      - name: Build and push Docker image
+        run: |
+          gcloud auth configure-docker gcr.io
+          docker build -t gcr.io/receipt-460023/receipt-backend:${{ github.sha }} .
+          docker push gcr.io/receipt-460023/receipt-backend:${{ github.sha }}
+      - name: Deploy to Cloud Run (Stable)
+        run: |
+          gcloud run deploy backend-stable \
+            --image gcr.io/receipt-460023/receipt-backend:${{ github.sha }} \
+            --region us-central1 \
+            --platform managed \
+            --allow-unauthenticated \
+            --set-env-vars MONGODB_URI=${{ secrets.MONGODB_URI }},SPRING_PROFILES_ACTIVE=prod
+      - name: Deploy to Cloud Run (Canary)
+        run: |
+          gcloud run deploy backend-canary \
+            --image gcr.io/receipt-460023/receipt-backend:${{ github.sha }} \
+            --region us-central1 \
+            --platform managed \
+            --allow-unauthenticated \
+            --set-env-vars MONGODB_URI=${{ secrets.MONGODB_URI }},SPRING_PROFILES_ACTIVE=prod
+      - name: Traffic Splitting
+        run: |
+          gcloud run services update-traffic backend-stable \
+            --to-revisions backend-stable=90,backend-canary=10 \
+            --region us-central1

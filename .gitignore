@@ -1,1 +1,2 @@
-src/test/resources/test.properties
+src/main/resources/application-local.properties
+**target**

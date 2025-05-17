@@ -11,6 +11,7 @@ import org.bson.codecs.configuration.CodecRegistry;
 import org.bson.codecs.pojo.PojoCodecProvider;
 import org.bson.conversions.Bson;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Component;
 import jakarta.annotation.PostConstruct;
 
@@ -32,8 +33,10 @@ public class Persistence {
     @Value("${spring.data.mongodb.database}")
     private String mongoDatabase;
 
-    @Value("${databaseCollection}")
+    @Value("${spring.data.mongodb.collection}")
     private String mongoCollection;
+
+    private final Environment environment; // To access active profiles
 
     private MongoClient mongoClient;
     private MongoCollection<Recipe> collection;
@@ -45,22 +48,26 @@ public class Persistence {
         new Recipe("fried rice", Arrays.asList("rice", "soy sauce", "egg", "onion", "pea", "carrot", "sesame oil"), 40)
     );
 
-    public Persistence() {}
+    // Inject Environment to access active profiles
+    public Persistence(Environment environment) {
+        this.environment = environment;
+    }
 
     @PostConstruct
     public void initMongoDBClient() {
         Logger.getLogger("org.mongodb.driver").setLevel(Level.WARNING);
 
-        // Debug prints for MongoDB connection values
+        // Log active profiles and configuration
         System.out.println("=== MongoDB Connection Debug ===");
+        System.out.println("Active Profiles: " + Arrays.toString(environment.getActiveProfiles()));
         System.out.println("mongoUri: " + mongoUri);
         System.out.println("mongoDatabase: " + mongoDatabase);
         System.out.println("mongoCollection: " + mongoCollection);
         System.out.println("===============================");
 
-        // Check for null or empty mongoUri
+        // Validate MongoDB URI
         if (mongoUri == null || mongoUri.isEmpty()) {
-            System.err.println("MongoDB URI is not configured. Please set 'spring.data.mongodb.uri' in application.properties.");
+            System.err.println("MongoDB URI is not configured for profile: " + Arrays.toString(environment.getActiveProfiles()));
             throw new IllegalStateException("MongoDB URI is not configured.");
         }
 
@@ -78,22 +85,49 @@ public class Persistence {
 
         try {
             mongoClient = MongoClients.create(settings);
-        } catch (MongoException me) {
-            System.err.println("Unable to connect to MongoDB: " + me);
-            System.exit(1);
-        }
+            MongoDatabase database = mongoClient.getDatabase(mongoDatabase);
+            collection = database.getCollection(mongoCollection, Recipe.class);
+            System.out.println("Successfully connected to MongoDB database: " + mongoDatabase);
 
-        MongoDatabase database = mongoClient.getDatabase(mongoDatabase);
-        collection = database.getCollection(mongoCollection, Recipe.class);
+            // Seed default recipes if collection is empty
+            seedInitialRecipes();
+        } catch (MongoException me) {
+            System.err.println("Unable to connect to MongoDB: " + me.getMessage());
+            throw new RuntimeException("MongoDB connection failed", me);
+        }
+    }
+
+    private void seedInitialRecipes() {
+        try {
+            // Check if the collection is empty
+            long count = collection.countDocuments();
+            if (count == 0) {
+                System.out.println("Collection '" + mongoCollection + "' is empty. Seeding default recipes...");
+                int insertedCount = addRecipes(recipes);
+                if (insertedCount > 0) {
+                    System.out.println("Successfully seeded " + insertedCount + " recipes.");
+                } else {
+                    System.err.println("Failed to seed default recipes.");
+                }
+            } else {
+                System.out.println("Collection '" + mongoCollection + "' already contains " + count + " documents. Skipping seeding.");
+            }
+        } catch (MongoException me) {
+            System.err.println("Error seeding default recipes: " + me.getMessage());
+        }
     }
 
     public List<Recipe> getAllRecipes() {
-        MongoCursor<Recipe> cur = collection.find().iterator();
-        List<Recipe> myRecipes = new ArrayList<>();
-        while (cur.hasNext()) {
-            myRecipes.add(cur.next());
+        try (MongoCursor<Recipe> cur = collection.find().iterator()) {
+            List<Recipe> myRecipes = new ArrayList<>();
+            while (cur.hasNext()) {
+                myRecipes.add(cur.next());
+            }
+            return myRecipes;
+        } catch (MongoException me) {
+            System.err.println("Error retrieving recipes: " + me.getMessage());
+            return new ArrayList<>();
         }
-        return myRecipes;
     }
 
     public int addRecipes(List<Recipe> recipes) {
@@ -111,7 +145,7 @@ public class Persistence {
             DeleteResult deleteResult = collection.deleteMany(deleteFilter);
             return (int) deleteResult.getDeletedCount();
         } catch (MongoException me) {
-            System.err.println("Unable to delete recipes: " + me);
+            System.err.println("Unable to delete recipes: " + me.getMessage());
             return -1;
         }
     }

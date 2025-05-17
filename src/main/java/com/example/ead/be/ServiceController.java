@@ -15,7 +15,7 @@ public class ServiceController {
 
     @GetMapping("/")
     public String index() {
-        return "Greetings from EAD CA2 Template project 2023-24!";
+        return "Greetings from EAD CA2 Template project 2024-25!";
     }
 
     @GetMapping("/recipes")
