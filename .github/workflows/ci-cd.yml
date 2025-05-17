@@ -14,8 +14,8 @@ jobs:
         with:
           java-version: '17'
           distribution: 'temurin'
-      - name: Build and test
-        run: mvn clean install
+      - name: Run tests
+        run: mvn test
 
   deploy:
     needs: build-test
@@ -32,26 +32,30 @@ jobs:
       - name: Build and push Docker image
         run: |
           gcloud auth configure-docker gcr.io
-          docker build -t gcr.io/receipt-460023/receipt-backend:${{ github.sha }} .
-          docker push gcr.io/receipt-460023/receipt-backend:${{ github.sha }}
-      - name: Deploy to Cloud Run (Stable)
+          docker build -t gcr.io/${{ env.GCP_PROJECT }}/receipt-backend:${{ github.sha }} .
+          docker push gcr.io/${{ env.GCP_PROJECT }}/receipt-backend:${{ github.sha }}
+      - name: Deploy to Cloud Run (Stable Revision)
         run: |
-          gcloud run deploy backend-stable \
-            --image gcr.io/receipt-460023/receipt-backend:${{ github.sha }} \
+          gcloud run deploy backend \
+            --image gcr.io/${{ env.GCP_PROJECT }}/receipt-backend:${{ github.sha }} \
             --region us-central1 \
             --platform managed \
             --allow-unauthenticated \
+            --tag stable \
             --set-env-vars MONGODB_URI=${{ secrets.MONGODB_URI }},SPRING_PROFILES_ACTIVE=prod
-      - name: Deploy to Cloud Run (Canary)
+      - name: Deploy to Cloud Run (Canary Revision)
         run: |
-          gcloud run deploy backend-canary \
-            --image gcr.io/receipt-460023/receipt-backend:${{ github.sha }} \
+          gcloud run deploy backend \
+            --image gcr.io/${{ env.GCP_PROJECT }}/receipt-backend:${{ github.sha }} \
             --region us-central1 \
             --platform managed \
             --allow-unauthenticated \
+            --tag canary \
             --set-env-vars MONGODB_URI=${{ secrets.MONGODB_URI }},SPRING_PROFILES_ACTIVE=prod
       - name: Traffic Splitting
         run: |
-          gcloud run services update-traffic backend-stable \
-            --to-revisions backend-stable=90,backend-canary=10 \
+          gcloud run services update-traffic backend \
+            --to-tags stable=90,canary=10 \
             --region us-central1
+env:
+  GCP_PROJECT: receipt-460023
