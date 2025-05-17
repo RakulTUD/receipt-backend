@@ -1,2 +1,11 @@
-src/main/resources/application-local.properties
 **target**
+*.jar
+
+# Ignore local properties
+src/main/resources/application-local.properties
+
+# Ignore Terraform state
+terraform/terraform.tfstate
+terraform/terraform.tfstate.backup
+terraform/.terraform/
+terraform/.terraform.lock.hcl
