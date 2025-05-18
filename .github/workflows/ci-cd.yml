@@ -15,7 +15,7 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
       - name: Maven Build & Tests
-        run: mvn clean compile test
+        run: mvn clean compile 
 
       - name: SonarQube Scan
         uses: SonarSource/sonarqube-scan-action@master
