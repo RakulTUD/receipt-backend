@@ -15,7 +15,7 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
       - name: Maven Build & Tests
-        run: mvn clean compile 
+        run: mvn clean compile
 
       - name: SonarQube Scan
         uses: SonarSource/sonarqube-scan-action@master
@@ -34,7 +34,7 @@ jobs:
           out: 'reports'
           path: '.'
 
-  deploy:
+    deploy:
     needs: build-test
     runs-on: ubuntu-latest
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
@@ -64,30 +64,91 @@ jobs:
           exit-code: '0'
           ignore-unfixed: true
 
-      - name: Deploy to Cloud Run (Stable Revision)
+      - name: Deploy to Cloud Run (Canary)
         run: |
-          gcloud run deploy backend \
-            --image gcr.io/${{ env.GCP_PROJECT }}/receipt-backend:${{ github.sha }} \
-            --region us-central1 \
-            --platform managed \
-            --allow-unauthenticated \
-            --tag stable \
-            --set-env-vars MONGODB_URI=${{ secrets.MONGODB_URI }},SPRING_PROFILES_ACTIVE=prod
-
-      - name: Deploy to Cloud Run (Canary Revision)
-        run: |
+          # Deploy new revision with canary tag
           gcloud run deploy backend \
             --image gcr.io/${{ env.GCP_PROJECT }}/receipt-backend:${{ github.sha }} \
             --region us-central1 \
             --platform managed \
             --allow-unauthenticated \
             --tag canary \
+            --no-traffic \
             --set-env-vars MONGODB_URI=${{ secrets.MONGODB_URI }},SPRING_PROFILES_ACTIVE=prod
 
-      - name: Traffic Splitting
+      - name: Split Traffic
         run: |
+          # Split traffic between stable and canary
           gcloud run services update-traffic backend \
-            --to-tags stable=90,canary=10 \
-            --region us-central1
-env:
-  GCP_PROJECT: receipt-460023
+            --to-latest \
+            --region us-central1 \
+            --to-tags stable=90,canary=10
+
+      - name: Cleanup Old Revisions
+        run: |
+          # Keep only the last 2 revisions
+          gcloud run revisions list \
+            --service backend \
+            --region us-central1 \
+            --format="value(metadata.name)" \
+            --sort-by="~metadata.creationTimestamp" \
+            | tail -n +3 | xargs -r -I {} gcloud run revisions delete {} \
+            --region us-central1 --quiet      
+
+#   deploy:
+#     needs: build-test
+#     runs-on: ubuntu-latest
+#     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+#     steps:
+#       - uses: actions/checkout@v3
+
+#       - name: Authenticate to GCP
+#         uses: google-github-actions/auth@v1
+#         with:
+#           credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+#       - name: Set up Cloud SDK
+#         uses: google-github-actions/setup-gcloud@v1
+
+#       - name: Build and push Docker image
+#         run: |
+#           gcloud auth configure-docker gcr.io
+#           docker build -t gcr.io/${{ env.GCP_PROJECT }}/receipt-backend:${{ github.sha }} .
+#           docker push gcr.io/${{ env.GCP_PROJECT }}/receipt-backend:${{ github.sha }}
+
+#       - name: Trivy Image Scan
+#         uses: aquasecurity/trivy-action@master
+#         continue-on-error: true
+#         with:
+#           image-ref: 'gcr.io/${{ env.GCP_PROJECT }}/receipt-backend:${{ github.sha }}'
+#           format: 'table'
+#           exit-code: '0'
+#           ignore-unfixed: true
+
+#       - name: Deploy to Cloud Run (Stable Revision)
+#         run: |
+#           gcloud run deploy backend \
+#             --image gcr.io/${{ env.GCP_PROJECT }}/receipt-backend:${{ github.sha }} \
+#             --region us-central1 \
+#             --platform managed \
+#             --allow-unauthenticated \
+#             --tag stable \
+#             --set-env-vars MONGODB_URI=${{ secrets.MONGODB_URI }},SPRING_PROFILES_ACTIVE=prod
+
+#       - name: Deploy to Cloud Run (Canary Revision)
+#         run: |
+#           gcloud run deploy backend \
+#             --image gcr.io/${{ env.GCP_PROJECT }}/receipt-backend:${{ github.sha }} \
+#             --region us-central1 \
+#             --platform managed \
+#             --allow-unauthenticated \
+#             --tag canary \
+#             --set-env-vars MONGODB_URI=${{ secrets.MONGODB_URI }},SPRING_PROFILES_ACTIVE=prod
+
+#       - name: Traffic Splitting
+#         run: |
+#           gcloud run services update-traffic backend \
+#             --to-tags stable=90,canary=10 \
+#             --region us-central1
+# env:
+#   GCP_PROJECT: receipt-460023
