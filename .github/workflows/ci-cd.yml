@@ -64,43 +64,31 @@ jobs:
           exit-code: '0'
           ignore-unfixed: true
 
-      - name: Deploy to Cloud Run (Canary)
+      - name: Deploy to Cloud Run (Stable Revision)
         run: |
-          # Deploy new revision with canary tag
+          gcloud run deploy backend \
+            --image gcr.io/${{ env.GCP_PROJECT }}/receipt-backend:${{ github.sha }} \
+            --region us-central1 \
+            --platform managed \
+            --allow-unauthenticated \
+            --tag stable \
+            --set-env-vars MONGODB_URI=${{ secrets.MONGODB_URI }},SPRING_PROFILES_ACTIVE=prod
+      - name: Deploy to Cloud Run (Canary Revision)
+        run: |
           gcloud run deploy backend \
             --image gcr.io/${{ env.GCP_PROJECT }}/receipt-backend:${{ github.sha }} \
             --region us-central1 \
             --platform managed \
             --allow-unauthenticated \
             --tag canary \
-            --no-traffic \
             --set-env-vars MONGODB_URI=${{ secrets.MONGODB_URI }},SPRING_PROFILES_ACTIVE=prod
-
       - name: Traffic Splitting
         run: |
-          # Get the latest revision name
-          LATEST_REV=$(gcloud run revisions list \
-            --service backend \
-            --region us-central1 \
-            --format="value(metadata.name)" \
-            --limit 1 \
-            --sort-by="~metadata.creationTimestamp")
-
-          # Split traffic
           gcloud run services update-traffic backend \
-            --region us-central1 \
-            --to-revisions stable=90,$LATEST_REV=10
-
-      - name: Cleanup Old Revisions
-        run: |
-          # Keep only the last 2 revisions
-          gcloud run revisions list \
-            --service backend \
-            --region us-central1 \
-            --format="value(metadata.name)" \
-            --sort-by="~metadata.creationTimestamp" \
-            | tail -n +3 | xargs -r -I {} gcloud run revisions delete {} \
-            --region us-central1 --quiet      
+            --to-tags stable=90,canary=10 \
+            --region us-central1
+env:
+  GCP_PROJECT: receipt-460023 
 
 #   deploy:
 #     needs: build-test
