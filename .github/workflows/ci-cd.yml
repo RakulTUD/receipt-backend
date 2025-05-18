@@ -76,13 +76,20 @@ jobs:
             --no-traffic \
             --set-env-vars MONGODB_URI=${{ secrets.MONGODB_URI }},SPRING_PROFILES_ACTIVE=prod
 
-      - name: Split Traffic
+      - name: Traffic Splitting
         run: |
-          # Split traffic between stable and canary
-          gcloud run services update-traffic backend \
-            --to-latest \
+          # Get the latest revision name
+          LATEST_REV=$(gcloud run revisions list \
+            --service backend \
             --region us-central1 \
-            --to-tags stable=90,canary=10
+            --format="value(metadata.name)" \
+            --limit 1 \
+            --sort-by="~metadata.creationTimestamp")
+
+          # Split traffic
+          gcloud run services update-traffic backend \
+            --region us-central1 \
+            --to-revisions stable=90,$LATEST_REV=10
 
       - name: Cleanup Old Revisions
         run: |
