@@ -17,6 +17,23 @@ jobs:
       - name: Maven Build & Tests
         run: mvn clean compile test
 
+      - name: SonarQube Scan
+        uses: SonarSource/sonarqube-scan-action@master
+        continue-on-error: true
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: https://sonarcloud.io
+          SONAR_SCANNER_OPTS: "-Dsonar.verbose=true"
+
+      - name: OWASP Dependency-Check
+        uses: dependency-check/Dependency-Check_Action@main
+        continue-on-error: true
+        with:
+          project: 'receipt-backend'
+          format: 'HTML'
+          out: 'reports'
+          path: '.'
+
   deploy:
     needs: build-test
     runs-on: ubuntu-latest
@@ -37,6 +54,15 @@ jobs:
           gcloud auth configure-docker gcr.io
           docker build -t gcr.io/${{ env.GCP_PROJECT }}/receipt-backend:${{ github.sha }} .
           docker push gcr.io/${{ env.GCP_PROJECT }}/receipt-backend:${{ github.sha }}
+
+      - name: Trivy Image Scan
+        uses: aquasecurity/trivy-action@master
+        continue-on-error: true
+        with:
+          image-ref: 'gcr.io/${{ env.GCP_PROJECT }}/receipt-backend:${{ github.sha }}'
+          format: 'table'
+          exit-code: '0'
+          ignore-unfixed: true
 
       - name: Deploy to Cloud Run (Stable Revision)
         run: |
